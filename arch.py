@@ -65,26 +65,28 @@ def find_user(chat_id):
     return None
     
 #---------------users_logic---------------    
-def sum_of_quantities(given_str, quantity, units):
+def sum_of_quantities(given_str, given_value, given_units):
 
     components = given_str.split("+")
     for count,element in enumerate(components):
-        numunit = element.strip() #gets rid of spaces
+        numunit = element.strip() #gets rid of whitespaces
         numunit = numunit.split(" ")
         if(len(numunit) == 2):
-            num = numunit[0]
-            unit = numunit[1]
-            if(unit == units):
-                components[count] = f"{int(num)+quantity} {unit}"
+            value_in_str = numunit[0]
+            units_in_str = numunit[1]
+            if(units_in_str == given_units):
+                components[count] = f"{int(value_in_str)+given_value} {units_in_str}"
                 return " + ".join(components)  
-            for i in STANDART_UNITS:
-                if(units in i):
-                    components[count] = f"{int(num)+quantity} {i[0]}"
-                    return " + ".join(components)  
+            
+            # for i in STANDART_UNITS:
+            #     if(given_units in i):
+            #         print("gg " + given_units + " in " + i[0])
+            #         components[count] = f"{int(value_in_str)+given_value} {i[0]}"
+            #         return " + ".join(components)  
         else:
             return "error"
 
-    return f"{given_str} + {quantity} {units}"
+    return f"{given_str} + {given_value} {given_units}"
           
 class Ingredient:
     def __init__(self, name, quantity, units):
@@ -94,7 +96,7 @@ class Ingredient:
         except:
             print(f"Type exception for trying to convert{quantity} to int")
             self.quantity = "error"
-        self.units = units
+        self.units = units.lower()
     def __str__(self) -> str:
         return (f"{self.name.title()} - {self.quantity} {self.units}")
 

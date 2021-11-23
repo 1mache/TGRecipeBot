@@ -143,7 +143,7 @@ def get_dishes(message):
 @bot.message_handler(commands= ["test_glist"] )
 def test_glist(message):
     user = find_user(message.chat.id)
-    print(arch.calculate_groceries([user.dishes[0], user.dishes[1]]))
+    print(arch.calculate_groceries([user.dishes[0], user.dishes[1], user.dishes[2]]))
 
 @bot.message_handler(commands= ["show_ingredients"] )
 def view_dish(message):
