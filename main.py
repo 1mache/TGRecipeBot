@@ -143,7 +143,7 @@ def get_dishes(message):
 @bot.message_handler(commands= ["test_glist"] )
 def test_glist(message):
     user = find_user(message.chat.id)
-    print(arch.calculate_groceries([user.dishes[0], user.dishes[1], user.dishes[2]]))
+    print(arch.calculate_groceries(user))
 
 @bot.message_handler(commands= ["show_ingredients"] )
 def view_dish(message):
@@ -165,23 +165,23 @@ def view_dish(message):
     else:
         bot.send_message(message.chat.id, "You didn't specify the name of the dish to view!")
 
+#===========================DELETE DISH================================
 @bot.message_handler(commands= ["delete_dish"] )
 def delete_dish(message):
     u = find_user(message.chat.id)
-    request = message.text.split()
-    if(len(request)>1):
-        request.pop(0) #removes the command itself
-        name = ""
-        for word in request:
-            name += f"{word} " #joins the rest of the words into a name
-        d = find_dish(name, message.chat.id)
-        if(d != None):
-            ensure(message, f"Are you sure you want to delete the ingredient list for {d.name}?", delete_dish_from_user, u, d)
-        else:
-            bot.send_message(message.chat.id, "You don't have a dish with that name 🤔 try again!")
-    else:
-        bot.send_message(message.chat.id, "You didn't specify the name of the dish to delete! 🤔")
+    rkm = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    for dish in u.dishes:
+        rkm.add(types.KeyboardButton(dish.name.title()))
+    msg = bot.send_message(message.chat.id, "Which dish would you like to delete?", reply_markup=rkm)
+    bot.register_next_step_handler(msg, delete_check, u)
 
+def delete_check(message, user):
+    hide_markup = types.ReplyKeyboardRemove()
+    dish = arch.find_dish(message.text, message.chat.id)
+    if dish != None :
+        ensure(message, f"Are you sure you want to delete {dish.name.title()}", delete_dish_from_user, user, dish)
+    else:
+        bot.send_message(message.chat.id, "You dont have a dish with that name in your list", reply_markup= hide_markup)
 
 def delete_dish_from_user(u, d):
     u.remove_dish(d)
@@ -197,13 +197,11 @@ def set_plan_day(message):
     bot.send_message(message.chat.id, "Please type a name of the week day (in english) which will be your planning day", reply_markup=ikm)
 
 
-@bot.callback_query_handler(func= lambda call: True)
+@bot.callback_query_handler(func= lambda call: "_plan" in call.data)
 def weekday_callback(call):
-    if("_plan" in call.data):
-        data = call.data[:-5] #slices the _plan part
-        if data.lower() in c.DAYS_NAMES.values():
-            find_user(call.message.chat.id).change_planday(call.data)
-            bot.send_message(call.message.chat.id, f"Your plan day was set to {data}")
+    data = call.data[:-5] #slices the _plan part
+    find_user(call.message.chat.id).change_planday(call.data)
+    bot.send_message(call.message.chat.id, f"Your plan day was set to {data}")
 
 @bot.message_handler(commands= ["my_plan_day"])
 def get_plan_day(message):
@@ -213,45 +211,56 @@ def get_plan_day(message):
 def get_schedule(message):
     u = find_user(message.chat.id)
     text = ""
+
     if(len(u.schedule)==0):
         bot.send_message(message.chat.id, "Currently you dont have a schedule, /new_schedule to create one or wait for notification on your set plan day.")
-        return    
+        return
+
     ikm = types.InlineKeyboardMarkup()        
     for day in u.schedule:
-        dish_name = "None 🍽️"
-        if(day.dish != None):
-            dish_name = day.dish.name.title()
-        text += f"{day.name.title()} / {day.date.strftime(c.DATE_FORMAT)}: {dish_name} \n"
+        dishes_names = "None 🍽️"
+        if(len(day.planned_dishes)!=0):
+            dishes_names = ""
+            for d in day.planned_dishes:
+                dishes_names += d.name.title() + ", "
+            dishes_names = dishes_names.strip()[:-1] #strips and slices the final coma off
 
-        ikm.add(types.InlineKeyboardButton(day.name.title(), callback_data= day.name))
+        text += f"{day.name.title()} / {day.date.strftime(c.DATE_FORMAT)}: {dishes_names} \n"
+
+        ikm.add(types.InlineKeyboardButton(day.name.title(), callback_data= day.name+"_day_edit"))
     
     text += """-------------
-Select one of the days to set/change a dish!🍴"""
+Select one of the days to clear/add a dish!🍴"""
+
     bot.send_message(message.chat.id, text, reply_markup=ikm)
 
-@bot.callback_query_handler(func= lambda call: True)
+@bot.callback_query_handler(func= lambda call: "_day_edit" in call.data)
 def setdish_callback(call):
-    if call.data.lower() in c.DAYS_NAMES.values():
+    data = call.data[:-9] #slices the identifier
+    if data in c.DAYS_NAMES.values():
         print("asking for dishname")
-        ask_for_dishname(call.message.chat.id,call.data)
+        ask_for_dishname(call.message.chat.id,data)
     else:
         print("Day upper case error")
 
 def ask_for_dishname(chat_id, day_name):
-    msg = bot.send_message(chat_id, f"Please type a give me a dish to put on {day_name}! ('None' for clearing day)")
+    msg = bot.send_message(chat_id, f"Please type a give me a dish to put on {day_name}! ('clear' for clearing day)")
     bot.register_next_step_handler(msg, setday_finalstep, day_name)
 
 def setday_finalstep(message, day_name):
     u = find_user(message.chat.id)
-    dish_name = message.text.strip()
-    if(dish_name == "None"): 
-        u.set_dish(day_name, None)
-        bot.send_message(message.chat.id, f"Successfully cleared {day_name}")
-    for dish in u.dishes:
-        if(dish.name == dish_name):
-            u.set_dish(day_name, dish)
-            bot.send_message(message.chat.id, f"Successfully scheduled {dish_name} on {day_name} 🍴")
-            return
+    dish_name = message.text.strip().lower()
+    if(dish_name == "clear"): 
+        u.clearday(day_name)
+        bot.send_message(message.chat.id, f"Successfully cleared {day_name.title()}")
+        return
+   
+    found_dish = arch.find_dish(dish_name, message.chat.id)
+    if(found_dish != None):
+        u.add_dish_to_schedule(day_name, found_dish)
+        bot.send_message(message.chat.id, f"Successfully scheduled {dish_name.title()} on {day_name.title()} 🍴")
+        return
+
     msg = bot.send_message(message.chat.id, f"This dish is not in your dish list 🤔 please try again! ")
     bot.register_next_step_handler(msg, setday_finalstep, day_name)
 

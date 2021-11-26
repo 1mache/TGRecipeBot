@@ -55,19 +55,29 @@ class User():
     @saver 
     def remove_dish(self,dish):
         self.dishes.remove(dish)
+        for day in self.schedule:
+            for d in day.planned_dishes:
+                if(dish.name == d.name):
+                    day.planned_dishes.remove(d)
 
     @saver 
     def add_schedule(self, schedule):
         self.schedule = schedule
     
     @saver 
-    def set_dish(self, day_name, dish):
+    def add_dish_to_schedule(self, day_name, dish):
         if(len(self.schedule) != 0):
             for day in self.schedule:
                 if day.name == day_name:
-                    day.assign_dish(dish)
+                    day.add_dish(dish)
         else:
             print("Error")
+    
+    @saver
+    def clearday(self, day_name):
+        for day in self.schedule:
+            if day.name == day_name:
+                day.clear()
 
 def find_user(chat_id) -> User:
     global users 
@@ -91,11 +101,11 @@ def sum_of_quantities(given_str, given_value, given_units):
                 components[count] = f"{int(value_in_str)+given_value} {units_in_str}"
                 return " + ".join(components)  
             
-            # for i in STANDART_UNITS:
-            #     if(given_units in i):
-            #         print("gg " + given_units + " in " + i[0])
-            #         components[count] = f"{int(value_in_str)+given_value} {i[0]}"
-            #         return " + ".join(components)  
+            for i in STANDART_UNITS:
+                if(given_units in i):
+                    print("gg " + given_units + " in " + i[0])
+                    components[count] = f"{int(value_in_str)+given_value} {i[0]}"
+                    return " + ".join(components)  
         else:
             return "error"
 
@@ -122,14 +132,17 @@ class Day:
     def __init__(self, name, date):
         self.name = name.lower()
         self.date = date
-        self.dish = None
+        self.planned_dishes = []
 
     def __str__(self) -> str:
         #debug
         return(f"{self.name.title()}, {self.date.strftime(c.DATE_FORMAT)}")
 
-    def assign_dish(self, dish):
-        self.dish = dish
+    def add_dish(self, dish):
+        self.planned_dishes.append(dish)
+    
+    def clear(self):
+        self.planned_dishes = []
     
 #---------------interaction---------------
 
@@ -162,14 +175,15 @@ def find_dish(name,chat_id):
         print("no user with that chat id")
     return None
 
-def calculate_groceries(dishes):
+def calculate_groceries(user):
     groceries = {}
-    for dish in dishes:
-        for ingr in dish.ingrdnts:
-            if(ingr.name in groceries.keys()):
-                print("found duplicat ingredient")
-                groceries[ingr.name] = sum_of_quantities(groceries[ingr.name], ingr.quantity, ingr.units)
-            else:
-                groceries[ingr.name] = f"{ingr.quantity} {ingr.units}"
+    for day in user.schedule:
+        for dish in day.planned_dishes:
+            for ingr in dish.ingrdnts:
+                if(ingr.name in groceries.keys()):
+                    print("found duplicat ingredient")
+                    groceries[ingr.name] = sum_of_quantities(groceries[ingr.name], ingr.quantity, ingr.units)
+                else:
+                    groceries[ingr.name] = f"{ingr.quantity} {ingr.units}"
     
     return groceries
