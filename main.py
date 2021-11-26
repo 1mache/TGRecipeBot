@@ -1,7 +1,7 @@
-from threading import current_thread
+
 import types
 import telebot
-from telebot import REPLY_MARKUP_TYPES, types
+from telebot import types
 import arch
 from arch import Ingredient, find_dish, find_user
 import constants as c
@@ -42,12 +42,12 @@ def ensure(message, question, func , *args, **kwargs):
 def bool_answer_handler(message, func, *args, **kwargs):
     hide_markup = types.ReplyKeyboardRemove()
     if(message.text.lower() == "yes"):
-        bot.send_message(message.chat.id, "OK.", reply_markup=hide_markup)
+        bot.send_message(message.chat.id, "OK. 👌", reply_markup=hide_markup)
         func(*args, **kwargs)
     elif(message.text.lower() == "no"):
         bot.send_message(message.chat.id, "Command was cancelled.", reply_markup=hide_markup)
     else:
-        bot.send_message(message.chat.id, "What? Thats not a Yes/No! Command was cancelled.", reply_markup=hide_markup)
+        bot.send_message(message.chat.id, "What? Thats not a Yes/No! 🤔 Command was cancelled.", reply_markup=hide_markup)
 #===============ensure logic================
 
 #===============ingridient input logic==============
@@ -178,9 +178,9 @@ def delete_dish(message):
         if(d != None):
             ensure(message, f"Are you sure you want to delete the ingredient list for {d.name}?", delete_dish_from_user, u, d)
         else:
-            bot.send_message(message.chat.id, "You don't have a dish with that name, try again!")
+            bot.send_message(message.chat.id, "You don't have a dish with that name 🤔 try again!")
     else:
-        bot.send_message(message.chat.id, "You didn't specify the name of the dish to delete!")
+        bot.send_message(message.chat.id, "You didn't specify the name of the dish to delete! 🤔")
 
 
 def delete_dish_from_user(u, d):
@@ -193,15 +193,17 @@ def set_plan_day(message):
     ikm = types.InlineKeyboardMarkup()
     for i in range(0,7):
         text = c.DAYS_NAMES[i].title()
-        ikm.add(types.InlineKeyboardButton(text, callback_data= text))
+        ikm.add(types.InlineKeyboardButton(text, callback_data= text + "_plan"))
     bot.send_message(message.chat.id, "Please type a name of the week day (in english) which will be your planning day", reply_markup=ikm)
 
 
 @bot.callback_query_handler(func= lambda call: True)
 def weekday_callback(call):
-    if call.data.lower() in c.DAYS_NAMES.values():
-        find_user(call.message.chat.id).change_planday(call.data)
-        bot.send_message(call.message.chat.id, f"Your plan day was set to {call.data}")
+    if("_plan" in call.data):
+        data = call.data[:-5] #slices the _plan part
+        if data.lower() in c.DAYS_NAMES.values():
+            find_user(call.message.chat.id).change_planday(call.data)
+            bot.send_message(call.message.chat.id, f"Your plan day was set to {data}")
 
 @bot.message_handler(commands= ["my_plan_day"])
 def get_plan_day(message):
@@ -214,24 +216,58 @@ def get_schedule(message):
     if(len(u.schedule)==0):
         bot.send_message(message.chat.id, "Currently you dont have a schedule, /new_schedule to create one or wait for notification on your set plan day.")
         return    
+    ikm = types.InlineKeyboardMarkup()        
     for day in u.schedule:
-        dish_name = "None"
+        dish_name = "None 🍽️"
         if(day.dish != None):
             dish_name = day.dish.name.title()
-        text += f"{day.name.title()} / {day.date}: {dish_name} \n"
-    bot.send_message(message.chat.id, text)
+        text += f"{day.name.title()} / {day.date.strftime(c.DATE_FORMAT)}: {dish_name} \n"
+
+        ikm.add(types.InlineKeyboardButton(day.name.title(), callback_data= day.name))
+    
+    text += """-------------
+Select one of the days to set/change a dish!🍴"""
+    bot.send_message(message.chat.id, text, reply_markup=ikm)
+
+@bot.callback_query_handler(func= lambda call: True)
+def setdish_callback(call):
+    if call.data.lower() in c.DAYS_NAMES.values():
+        print("asking for dishname")
+        ask_for_dishname(call.message.chat.id,call.data)
+    else:
+        print("Day upper case error")
+
+def ask_for_dishname(chat_id, day_name):
+    msg = bot.send_message(chat_id, f"Please type a give me a dish to put on {day_name}! ('None' for clearing day)")
+    bot.register_next_step_handler(msg, setday_finalstep, day_name)
+
+def setday_finalstep(message, day_name):
+    u = find_user(message.chat.id)
+    dish_name = message.text.strip()
+    if(dish_name == "None"): 
+        u.set_dish(day_name, None)
+        bot.send_message(message.chat.id, f"Successfully cleared {day_name}")
+    for dish in u.dishes:
+        if(dish.name == dish_name):
+            u.set_dish(day_name, dish)
+            bot.send_message(message.chat.id, f"Successfully scheduled {dish_name} on {day_name} 🍴")
+            return
+    msg = bot.send_message(message.chat.id, f"This dish is not in your dish list 🤔 please try again! ")
+    bot.register_next_step_handler(msg, setday_finalstep, day_name)
 
 @bot.message_handler(commands=["new_schedule"])
 def new_schedule(message):
     u = find_user(message.chat.id)
     today_date = dt.datetime.today()
-    today = arch.Day(c.DAYS_NAMES[int(today_date.strftime("%w"))], today_date)
+    today = arch.Day(c.DAYS_NAMES[ int(today_date.strftime("%w")) ], today_date)
     schedule = [today]
     for x in range(1,7):
         date = schedule[x-1].date + dt.timedelta(days=1)
-        new_day = arch.Day(c.DAYS_NAMES[int(date.strftime("%w"))], date)
-        print(str(new_day))
+        new_day = arch.Day(c.DAYS_NAMES[ int(date.strftime("%w")) ], date)
         schedule.append(new_day)
+    
+    u.add_schedule(schedule) 
+    bot.send_message(message.chat.id, f"Successfully created a schedule starting today {today_date.strftime(c.DATE_FORMAT)}")
     
 #---------------------------schedule------------------------
 

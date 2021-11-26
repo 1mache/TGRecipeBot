@@ -56,7 +56,20 @@ class User():
     def remove_dish(self,dish):
         self.dishes.remove(dish)
 
-def find_user(chat_id):
+    @saver 
+    def add_schedule(self, schedule):
+        self.schedule = schedule
+    
+    @saver 
+    def set_dish(self, day_name, dish):
+        if(len(self.schedule) != 0):
+            for day in self.schedule:
+                if day.name == day_name:
+                    day.assign_dish(dish)
+        else:
+            print("Error")
+
+def find_user(chat_id) -> User:
     global users 
     for u in users:
         if(u.chat_id == chat_id):
