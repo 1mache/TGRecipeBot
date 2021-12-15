@@ -6,8 +6,8 @@ G = ("g", "gram", "gr")
 KG = ("kg", "kilogram")
 ML = ("ml", "mililiter")
 L = ("l", "liter")
-SPOONS = ("spoons", "spoon")
-TEASPOONS = ("teaspoons", "teaspoon")
+SPOONS = ("spoons", "spoon", "sp")
+TEASPOONS = ("teaspoons", "teaspoon", "tsp")
 STANDART_UNITS = [G, KG, ML, L, SPOONS, TEASPOONS]
 #---------------users_logic---------------
 users = []
@@ -35,10 +35,11 @@ def load_users():
         load_users()
 
 class User():
-    def __init__(self, chat_id, dishes = [], schedule = [], plan_day = "Friday"):
+    def __init__(self, chat_id, dishes = [], schedule = [], grocery_list = {}, plan_day = "Friday"):
         self.chat_id= chat_id
         self.dishes= dishes
         self.schedule = schedule
+        self.grocery_list = grocery_list
         self.plan_day= plan_day
 
     def __str__(self) -> str:
@@ -78,6 +79,14 @@ class User():
         for day in self.schedule:
             if day.name == day_name:
                 day.clear()
+    
+    @saver
+    def add_grocery_list(self, grocery_list):
+        self.grocery_list = grocery_list
+    
+    @saver
+    def clear_groceries(self):
+        self.grocery_list = {}
 
 def find_user(chat_id) -> User:
     global users 
@@ -106,13 +115,18 @@ def sum_of_quantities(given_str, given_value, given_units):
                     print("gg " + given_units + " in " + i[0])
                     components[count] = f"{int(value_in_str)+given_value} {i[0]}"
                     return " + ".join(components)  
+        elif(len(numunit) == 1):
+            value_in_str = numunit[0]
+            if(given_units == ""):
+                components[count] = f"{int(value_in_str)+given_value}"
+                return " + ".join(components)  
         else:
-            return "error"
+            return f"error:{len(numunit)}"
 
     return f"{given_str} + {given_value} {given_units}"
           
 class Ingredient:
-    def __init__(self, name, quantity, units):
+    def __init__(self, name, quantity, units = ""):
         self.name = name.lower()
         try:
             self.quantity  = int(quantity)
@@ -164,7 +178,7 @@ def new_dish(name, ingrdnts, chat_id):
         new_user(chat_id)
         user.add_dish
 
-def find_dish(name,chat_id):
+def find_dish(name,chat_id) -> Dish:
     name = name.strip() # makes sure there are no whitespaces
     u = find_user(chat_id)
     if(u != None):
@@ -175,13 +189,12 @@ def find_dish(name,chat_id):
         print("no user with that chat id")
     return None
 
-def calculate_groceries(user):
+def calculate_groceries(user) -> dict:
     groceries = {}
     for day in user.schedule:
         for dish in day.planned_dishes:
             for ingr in dish.ingrdnts:
                 if(ingr.name in groceries.keys()):
-                    print("found duplicat ingredient")
                     groceries[ingr.name] = sum_of_quantities(groceries[ingr.name], ingr.quantity, ingr.units)
                 else:
                     groceries[ingr.name] = f"{ingr.quantity} {ingr.units}"
